@@ -1,0 +1,22 @@
+{
+  "name": "wordpress-app",
+  "version": "1.0.0",
+  "description": "wordpress application",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ariesrei/wpApp.git"
+  },
+  "author": "Aries M",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ariesrei/wpApp/issues"
+  },
+  "homepage": "https://github.com/ariesrei/wpApp#readme",
+  "devDependencies": {
+    "rollup": "^0.50.0"
+  }
+}
