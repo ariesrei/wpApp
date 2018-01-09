@@ -2,9 +2,10 @@
 
 ## Using docker-compose
 
-<h3>With the following images</h3>
-MySql
-Phpmyadmin
-Wordpress
+### With the following Docker Images
+
+⋅⋅* MySql
+⋅⋅* Phpmyadmin
+⋅⋅* Wordpress
 
 
