@@ -4,8 +4,8 @@
 
 ### With the following Docker Images
 
-⋅⋅* MySql
-⋅⋅* Phpmyadmin
-⋅⋅* Wordpress
+* MySql
+* Phpmyadmin
+* Wordpress
 
 
