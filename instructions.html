@@ -1,0 +1,42 @@
+
+
+<h2>SETUP WORDPRESS ON DOCKER (ubuntu)</h2>
+
+<h3>Pull the following images from docker hub</h3>
+
+<strong>Download only the official image or the one with the highest stars</strong>
+
+<ul>
+<li>Mysql ( docker pull mysql )</li>
+<li>Phpmyadmin ( docker pull phpmyadmin/phpmyadmin )</li>
+<li>Wordpress ( docker pull wordpress )</li>
+</ul>
+
+
+<h2>This setup uses docker-compose (much easier setup)</h2>
+
+<ol>
+
+<li>Step 1. Install Docker for Ubuntu / Windows / Mac </li>
+<li>Step 2. Pull images from docker hub.</li>
+<li>Step 3. Copy docker-compose.yml </li>
+
+</ol>
+
+
+How to get inside docker container
+
+- docker exec -it <container name> /bin/bash  (to get a bash shell in the container)
+- Generically, use docker exec -it <container name> <command> 
+
+
+
+<h2>Issues</h2>
+<ol>
+<li>
+	Updates on wordpress <br/>
+	- Add this line in you wp-config.php
+	- define('FS_METHOD','direct'); 
+
+</li>
+</ol>

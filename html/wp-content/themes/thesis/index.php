@@ -1,4 +1,8 @@
 <?php
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
-// Welcome to the machine.
-?>
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+
+Welcome to the machine.
+*/

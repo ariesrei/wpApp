@@ -1,92 +1,55 @@
 <?php
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
 class thesis_user_packages {
 	private $packages = array();	// (array) format: ('package_class' => 'current_folder')
 	public $active = array();		// (array) all active user package classes
 
 	public function __construct() {
 		global $thesis;
-		if ($thesis->environment == 'admin') {
-			$args = array(
-				'title' => __('Thesis Upload Package', 'thesis'),
-				'prefix' => 'thesis_package_uploader',
-				'folder' => 'package');
-			$this->upload = new thesis_upload($args);
-		}
-		if (!($thesis->environment == 'editor' || $thesis->environment == 'ajax' || ($thesis->environment == 'admin' && !empty($_GET['canvas']) && $_GET['canvas'] == 'packages'))) return;
+		if (!($thesis->environment == 'admin' || $thesis->environment == 'thesis' || $thesis->environment == 'editor' || $thesis->environment == 'ajax')) return;
 		$this->packages = is_array($packages = $thesis->api->get_option('thesis_packages')) ? $packages : $this->packages;
 		$this->active = array_keys($this->packages);
 		add_action('thesis_include_packages', array($this, 'include_packages'));
-		add_action('thesis_admin_canvas', array($this, 'canvas'));
-		$this->installed = $this->get_items();
-		add_action('init', array($this, 'queue_scripts'));
-		if ($thesis->environment == 'ajax') {
-			add_action('wp_ajax_save_packages', array($this, 'save')); #wp
+		if ($thesis->environment == 'admin') {
+			$this->upload = new thesis_upload(array(
+				'title' => __('Thesis Upload Package', 'thesis'),
+				'prefix' => 'thesis_package_uploader',
+				'folder' => 'package'));
+			add_action('admin_post_save_packages', array($this, 'save'));
 		}
-	}
-	
-	public function queue_scripts() {
-		global $thesis;
-		wp_enqueue_style('thesis-objects', THESIS_CSS_URL . '/objects.css', array('thesis-admin'), $thesis->version); #wp
-		wp_enqueue_style('thesis-packages', THESIS_CSS_URL . '/packages.css', array('thesis-objects'), $thesis->version); #wp
-		wp_enqueue_script('thesis-packages', THESIS_JS_URL . '/packages.js', array('thesis-menu'), $thesis->version); #wp
+		if ($thesis->environment == 'thesis')
+			add_action('admin_init', array($this, 'admin_init'));
+		if ($thesis->environment == 'ajax')
+			add_action('wp_ajax_delete_package', array($this, 'delete'));
 	}
 
 	public function include_packages() {
 		foreach ($this->packages as $class => $folder)
-			if (file_exists(THESIS_USER_PACKAGES . "/$folder/package.php"))
-				include_once(THESIS_USER_PACKAGES . "/$folder/package.php");
+			if (file_exists(THESIS_USER_PACKAGES. "/$folder/package.php"))
+				include_once(THESIS_USER_PACKAGES. "/$folder/package.php");
 	}
 
-	public function canvas() {
-		global $thesis;
-		$tab = str_repeat("\t", $depth = 2);
-		$list = '';
-		foreach ($this->installed as $class => $package)
-			$list .= $this->item_info($package, $depth);
-		echo
-			"$tab<h3>" . __('Thesis Packages', 'thesis') . " <span id=\"package_upload\" data-style=\"button action\" title=\"" . __('upload a new package', 'thesis') . "\">" . __('Upload Package', 'thesis') . "</span></h3>\n".
-			(!empty($this->updates) ? "<p id=\"update_link\"><a onclick=\"if(!thesis_update_message()) return false;\" href=\"". wp_nonce_url(admin_url('update.php?action=thesis_update_objects&update_type=package'), 'thesis-update-objects') ."\">". __('Update Packages', 'thesis') . "</a></p>\n" : '').
-			"$tab<p class=\"package_primer\">" . __('<strong>Note:</strong> The packages you select here will be activated and added to the CSS Editor, where you can add them to your CSS workflow.') . "</p>\n".
-			"$tab<form id=\"select_packages\" method=\"post\" action=\"\">\n". #wp
-			"$tab\t<div class=\"package_list\">\n".
-			$list.
-			"$tab\t</div>\n".
-			"$tab\t" . wp_nonce_field('thesis-update-packages', '_wpnonce-thesis-ajax', true, false) . "\n".
-			"$tab\t<input type=\"submit\" data-style=\"button save\" class=\"t_save\" id=\"save_packages\" name=\"save_packages\" value=\"". __('Save Packages', 'thesis') ."\" />\n".
-			"$tab</form>\n".
-			$thesis->api->popup(array(
-				'id' => 'package_uploader',
-				'title' => __('Upload a Thesis Package', 'thesis'),
-				'body' => $thesis->api->uploader('thesis_package_uploader')));
-	}
-	
-	public function item_info($package, $depth = 0) {
-		$active = is_object($this) ? $this->active : (is_array(get_option('thesis_packages')) ? array_keys(get_option('thesis_packages')) : 0);
-		if ($active === 0) return '';
-		$tab = str_repeat("\t", $depth);
-		$checked = is_array($active) && in_array($package['class'], $active) ? ' checked="checked"' : '';
-		$is_active = !empty($checked) ? ' active_package' : '';
-		$author = !empty($package['author']) ? " <span class=\"package_by\">" . __('by', 'thesis') . "</span> <span class=\"package_author\">". esc_attr($package['author']) ."</span>" : '';
-		$out =
-			"$tab\t\t<div id=\"package_". esc_attr($package['class']) ."\" class=\"package$is_active\" data-package=\"{$package['class']}\">\n".
-			"$tab\t\t\t<h4>". esc_attr($package['name']) . " <span class=\"package_version\">v " . esc_html($package['version']). "</span>$author".
-			(is_object($this) && !empty($this->updates[$package['class']]) ? " <span class=\"t_update_available\">" . __('Update Available!', 'thesis') . "</span>" : '').
-			"</h4>\n".
-			"$tab\t\t\t<p class=\"package_description\">". esc_textarea($package['description']) ."</p>\n".
-			"$tab\t\t\t<input type=\"checkbox\" class=\"select_package\" id=\"". esc_attr($package['class']) ."\" name=\"packages[". esc_attr($package['class']) ."]\" value=\"1\"$checked />\n".
-			"$tab\t\t\t<a onclick=\"thesis_packages.delete_popup('". esc_attr($package['class']) ."', '". wp_nonce_url(admin_url("update.php?action=thesis_delete_object&thesis_object_type=package&thesis_object_name={$package['class']}"), 'thesis-delete-object') ."')\" data-style=\"button delete\" class=\"delete_package\" data-package=\"". esc_attr($package['class']) ."\">". __('Delete Package', 'thesis') ."</a>\n".
-			"$tab\t\t</div>\n";
-		return $out;
-	}
-	
-	public function get_items() {
-		if (is_object($this)) {
-			$nawnce = !empty($_GET['_wpnonce']) ? $_GET['_wpnonce'] : false;
-			if (wp_verify_nonce($nawnce, 'thesis_did_update'))
-				delete_transient('thesis_packages_update');
-			$this->updates = get_transient('thesis_packages_update');
+	public function admin_init() {
+		add_filter('thesis_packages_menu', array($this, 'menu'), 1);
+		if (!empty($_GET['canvas']) && $_GET['canvas'] == 'packages') {
+			wp_enqueue_style('thesis-objects'); #wp
+			wp_enqueue_script('thesis-objects'); #wp
+			add_action('thesis_admin_canvas', array($this, 'canvas'));
 		}
+	}
+
+	public function menu($menu) {
+		$add['packages'] = array(
+			'text' => __('Select Packages', 'thesis'),
+			'url' => admin_url('admin.php?page=thesis&canvas=packages&show_packages'));
+		return is_array($menu) ? array_merge($menu, $add) : $add;
+	}
+
+	public static function get_items() {
 		$packages = array();
 		$path = THESIS_USER_PACKAGES;
 		$default_headers = array(
@@ -108,12 +71,62 @@ class thesis_user_packages {
 		return $packages;
 	}
 
+	public function canvas() {
+		global $thesis;
+		$tab = str_repeat("\t", $depth = 2);
+		$updates = get_transient('thesis_packages_update');
+		$packages = $this->get_items();
+		$sort = array();
+		$list = '';
+		foreach ($packages as $class => $package)
+			$sort[$class] = $package['name'];
+		natcasesort($sort);
+		foreach ($sort as $class => $name)
+			$list .= $this->item_info($packages[$class], $this->active, $updates, $depth);
+		echo (!empty($_GET['saved']) ? $thesis->api->alert(($_GET['saved'] === 'yes' ?
+			__('Packages saved!', 'thesis') :
+			__('Packages not saved. Please try again.', 'thesis')), 'objects_saved', true, '', $depth) : ''),
+			"$tab<h3>", __('Thesis Packages', 'thesis'),
+			(current_user_can('manage_options') ? " <span id=\"object_upload\" data-style=\"button action\" title=\"". __('upload a new package', 'thesis'). "\">". __('Upload Package', 'thesis'). "</span>" : ''), "</h3>\n",
+			"$tab<p class=\"object_primer\">", sprintf(__('The packages you select here will be activated and added to the <a href="%1$s">Skin %2$s Editor</a>, where you can add them to your %2$s workflow.'), set_url_scheme(home_url('?thesis_editor=1')), $thesis->api->base['css']), "</p>\n",
+			"$tab<p class=\"object_alert\">", __('<strong>Attention!</strong> As of Thesis 2.1, Packages are considered deprecated, and we no longer recommend installing or using them. Thanks to the flexibility of Thesis CSS Variables, Packages are now obsolete.', 'thesis'), "</p>\n",
+			"$tab<form id=\"select_objects\" method=\"post\" action=\"", admin_url('admin-post.php?action=save_packages'), "\">\n", #wp
+			"$tab\t<div class=\"object_list\">\n",
+			$list,
+			"$tab\t</div>\n",
+			"$tab\t", wp_nonce_field('thesis-update-packages', '_wpnonce-thesis-update-packages', true, false), "\n",
+			"$tab\t<input type=\"submit\" data-style=\"button save\" class=\"t_save\" id=\"save_objects\" name=\"save_packages\" value=\"", __('Save Packages', 'thesis'), "\" />\n",
+			"$tab</form>\n",
+			(current_user_can('manage_options') ?
+			$thesis->api->popup(array(
+				'id' => 'object_uploader',
+				'title' => __('Upload a Thesis Package', 'thesis'),
+				'body' => $thesis->api->uploader('thesis_package_uploader'))) : '');
+	}
+
+	public static function item_info($package, $active = array(), $updates = array(), $depth = 0) {
+		global $thesis;
+		$tab = str_repeat("\t", $depth);
+		$id = esc_attr($package['class']);
+		$checked = is_array($active) && in_array($package['class'], $active) ? ' checked="checked"' : '';
+		$author = !empty($package['author']) ? " <span class=\"object_by\">". __('by', 'thesis'). "</span> <span class=\"object_author\">". $thesis->api->efh($package['author']). "</span>" : '';
+		return
+			"$tab\t\t<div id=\"package_$id\" class=\"object". (!empty($checked) ? ' active_object' : ''). "\">\n".
+			"$tab\t\t\t<label for=\"$id\">". $thesis->api->efh($package['name']). " <span class=\"object_version\">v ". $thesis->api->efh($package['version']). "</span>$author".
+			(!empty($updates[$package['class']]) ? " <span class=\"t_update_available\">". __('Update Available!', 'thesis'). "</span>".
+			"<a onclick=\"if(!thesis_update_message()) return false;\" href=\"". wp_nonce_url(admin_url("update.php?action=thesis_update_objects&type=package&class=$id&name=". urlencode($thesis->api->efh($package['name']))), 'thesis-update-objects'). "\">". sprintf(__('Update %s', 'thesis'), $thesis->api->efh($package['name'])). "</a>" : ''). "</label>\n".
+			"$tab\t\t\t<p class=\"object_description\">". $thesis->api->efa($package['description']). "</p>\n".
+			"$tab\t\t\t<input type=\"checkbox\" class=\"select_object\" id=\"$id\" name=\"packages[$id]\" value=\"1\"$checked />\n".
+			"$tab\t\t\t<button data-style=\"button delete\" class=\"delete_object\" data-type=\"package\" data-class=\"$id\" data-name=\"". $thesis->api->efh($package['name']). "\">". __('Delete Package', 'thesis'). "</button>\n".
+			"$tab\t\t</div>\n";
+	}
+
 	public function save() {
 		global $thesis;
-		$thesis->wp->check('edit_theme_options');
-		parse_str(stripslashes($_POST['form']), $form);
-		$thesis->wp->nonce($form['_wpnonce-thesis-ajax'], 'thesis-update-packages');
-		if (is_array($form)) {
+		$thesis->wp->check();
+		$thesis->wp->nonce($_POST['_wpnonce-thesis-update-packages'], 'thesis-update-packages');
+		$saved = 'no';
+		if (is_array($form = $_POST)) {
 			$packages = array();
 			$installed = $this->get_items();
 			if (!empty($form['packages']) && is_array($form['packages']))
@@ -124,10 +137,21 @@ class thesis_user_packages {
 				delete_option('thesis_packages'); #wp
 			else
 				update_option('thesis_packages', $packages); #wp
-			echo $thesis->api->alert(__('Packages saved!', 'thesis'), 'packages_saved', true);
+			$saved = 'yes';
 		}
-		else
-			echo $thesis->api->alert(__('Packages not saved.', 'thesis'), 'packages_saved', true);
+		wp_redirect("admin.php?page=thesis&canvas=packages&saved=$saved&show_packages");
+		exit;
+	}
+
+	public function delete() {
+		global $thesis;
+		$thesis->wp->check();
+		if (empty($_POST['class']) || empty($_POST['name'])) return;
+		echo $thesis->api->popup(array(
+			'id' => 'delete_'. esc_attr($_POST['class']),
+			'title' => __('Delete Package', 'thesis'),
+			'body' =>
+				"<iframe style=\"width:100%; height:100%;\" frameborder=\"0\" src=\"". wp_nonce_url(admin_url("update.php?action=thesis_delete_object&thesis_object_type=package&thesis_object_class=". esc_attr($_POST['class']). "&thesis_object_name=". urlencode($_POST['name'])), 'thesis-delete-object'). "\" id=\"thesis_delete_". esc_attr($_POST['class']). "\"></iframe>\n"));
 		if ($thesis->environment == 'ajax') die();
 	}
 }

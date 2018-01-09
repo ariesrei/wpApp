@@ -1,5 +1,9 @@
 <?php
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
 class thesis_package {
 	// a title is required in ALL package extensions
 	public $title;					// (string) package title; must be defined in translate() for translation
@@ -24,7 +28,12 @@ class thesis_package {
 		$this->options = $this->_get_options(($this->_options = method_exists($this, 'options') && is_array($this->_fields = apply_filters("{$this->_class}_options", $this->options())) ?
 			array_merge($this->_options(), $this->_css(), $this->_fields) :
 			array_merge($this->_options(), $this->_css())), $options);
-		$this->selector = !empty($this->options['_selector']) ? trim(stripslashes($this->options['_selector'])) : $this->selector;
+		$this->selector = !empty($options['_selector']) ? trim(stripslashes($options['_selector'])) : $this->selector;
+		$this->construct();
+	}
+
+	protected function construct() {
+		// To be used by package extensions
 	}
 
 	private function _get_options($fields, $values) {
@@ -143,10 +152,7 @@ class thesis_package {
 	public function _save($pkg) {
 		global $thesis;
 		if (!is_array($pkg) || empty($pkg['id']) || !is_array($pkg['options']) || empty($pkg['options']['_name']) || empty($pkg['options']['_ref']) || $pkg['class'] != $this->_class) return false;
-		return is_array($package = $thesis->api->set_options($this->_options, $pkg['options'])) ? array(
-			'class' => $this->_class,
-			'id' => $pkg['id'],
-			'pkg' => $package) : false;
+		return is_array($package = $thesis->api->set_options($this->_options, $pkg['options'])) ? $package : false;
 	}
 
 	public function css() {
@@ -192,8 +198,8 @@ class thesis_package_basic extends thesis_package {
 				$thesis->api->css->number($this->options['line-height']) :
 				"{$height}px") . ';' : false;
 		$e['family'] = !empty($this->options['font-family']) ? ($this->options['font-family'] == 'inherit' ?
-			"font-family: inherit;" : (!empty($thesis->api->css->fonts) && !empty($thesis->api->css->fonts->fonts[$this->options['font-family']]) ?
-			"font-family: {$thesis->api->css->fonts->fonts[$this->options['font-family']]['family']};" : false)) : false;
+			"font-family: inherit;" : (!empty($thesis->api->fonts->list[$this->options['font-family']]) ?
+			"font-family: {$thesis->api->fonts->list[$this->options['font-family']]['family']};" : false)) : false;
 		$e['weight'] = !empty($this->options['font-weight']) ? "font-weight: {$this->options['font-weight']};" : false;
 		$e['style'] = !empty($this->options['font-style']) ? "font-style: {$this->options['font-style']};" : false;
 		$e['variant'] = !empty($this->options['font-variant']) ? "font-variant: {$this->options['font-variant']};" : false;
@@ -271,10 +277,10 @@ class thesis_package_links extends thesis_package {
 		}
 		return trim((!empty($a['a']) && is_array($a['a']) ?
 			"$this->selector { " . implode(' ', $a['a']) . " }\n" : '').
-			(!empty($a['hover']) && is_array($a['hover']) ?
-			"$this->selector:hover { " . implode(' ', $a['hover']) . " }\n" : '').
 			(!empty($a['visited']) && is_array($a['visited']) ?
 			"$this->selector:visited { " . implode(' ', $a['visited']) . " }\n" : '').
+			(!empty($a['hover']) && is_array($a['hover']) ?
+			"$this->selector:hover { " . implode(' ', $a['hover']) . " }\n" : '').
 			(!empty($a['active']) && is_array($a['active']) ?
 			"$this->selector:active { " . implode(' ', $a['active']) . " }\n" : ''));
 	}
@@ -362,8 +368,8 @@ class thesis_package_wp_nav extends thesis_package {
 		}
 		$styles['links'] =
 			"$s a { " . (!empty($this->options['font-family']) ? ($this->options['font-family'] == 'inherit' ?
-			 	"font-family: inherit; " : (!empty($thesis->api->css->fonts) && !empty($thesis->api->css->fonts->fonts[$this->options['font-family']]) ?
-				"font-family: {$thesis->api->css->fonts->fonts[$this->options['font-family']]['family']}; " : '')) : '') . (!empty($this->options['font-size']) && is_numeric($this->options['font-size']) ?
+			 	"font-family: inherit; " : (!empty($thesis->api->fonts->list[$this->options['font-family']]) ?
+				"font-family: {$thesis->api->fonts->list[$this->options['font-family']]['family']}; " : '')) : '') . (!empty($this->options['font-size']) && is_numeric($this->options['font-size']) ?
 				"font-size: {$this->options['font-size']}px; " : '') . (!empty($this->options['line-height']) ?
 				"line-height: " . $thesis->api->css->number($this->options['line-height']) . '; ' : '') . (!empty($this->options['font-weight']) ?
 				"font-weight: {$this->options['font-weight']}; " : '') . (!empty($this->options['font-style']) ?
@@ -479,8 +485,8 @@ class thesis_package_post_format extends thesis_package {
 				$thesis->api->css->number($this->options["$e-line-height"]) :
 				"{$height[$e]}px") . ';';
 			$font[$e]['family'] = !empty($this->options["$e-font-family"]) ? ($this->options["$e-font-family"] == 'inherit' ?
-				"font-family: inherit;" : (!empty($thesis->api->css->fonts) && !empty($thesis->api->css->fonts->fonts[$this->options["$e-font-family"]]) ?
-				"font-family: {$thesis->api->css->fonts->fonts[$this->options["$e-font-family"]]['family']};" : false)) : false;
+				"font-family: inherit;" : (!empty($thesis->api->fonts->list[$this->options["$e-font-family"]]) ?
+				"font-family: {$thesis->api->fonts->list[$this->options["$e-font-family"]]['family']};" : false)) : false;
 			$font[$e]['weight'] = !empty($this->options["$e-font-weight"]) ? "font-weight: " . $this->options["$e-font-weight"] . ";" : false;
 			$font[$e]['style'] = !empty($this->options["$e-font-style"]) ? "font-style: " . $this->options["$e-font-style"] . ";" : false;
 			$font[$e]['variant'] = !empty($this->options["$e-font-variant"]) ? "font-variant: " . $this->options["$e-font-variant"] . ";" : false;
@@ -504,7 +510,7 @@ class thesis_package_post_format extends thesis_package {
 			"$s li { margin-bottom: {$spacing[$li]}; }\n".
 			"$s ul ul, $s ul ol, $s ol ul, $s ol ol { margin-top: {$spacing[$li]}; }" : false;
 		$list = ($l = array_filter($list)) && !empty($l) ? implode("\n", array_filter($l)) . "\n" : '';
-		$this->clearfix = array("$s .post_content");
+		$this->clearfix = array($s, "$s .post_content");
 		return
 			$css.
 			"$s p, $s ul, $s ol, $s blockquote, $s pre, $s dl, $s dd { margin-bottom: {$spacing['single']}; }\n".
@@ -714,9 +720,9 @@ class thesis_package_wp_comments extends thesis_package {
 					$font[$e]['height'] = "line-height: " . (!empty($this->options["$e-line-height"]) ?
 						$thesis->api->css->number($this->options["$e-line-height"]) :
 						"{$height[$e]}px") . ';';
-					$font[$e]['family'] = !empty($this->options['font-family']) ? ($this->options['font-family'] == 'inherit' ?
-						"font-family: inherit;" : (!empty($thesis->api->css->fonts) && !empty($thesis->api->css->fonts->fonts[$this->options['font-family']]) ?
-						"font-family: {$thesis->api->css->fonts->fonts[$this->options['font-family']]['family']};" : false)) : false;
+					$font[$e]['family'] = !empty($this->options["$e-font-family"]) ? ($this->options["$e-font-family"] == 'inherit' ?
+						"font-family: inherit;" : (!empty($thesis->api->fonts->list[$this->options["$e-font-family"]]) ?
+						"font-family: {$thesis->api->fonts->list[$this->options["$e-font-family"]]['family']};" : false)) : false;
 					$font[$e]['weight'] = !empty($this->options["$e-font-weight"]) ? "font-weight: " . $this->options["$e-font-weight"] . ";" : false;
 					$font[$e]['style'] = !empty($this->options["$e-font-style"]) ? "font-style: " . $this->options["$e-font-style"] . ";" : false;
 					$font[$e]['variant'] = !empty($this->options["$e-font-variant"]) ? "font-variant: " . $this->options["$e-font-variant"] . ";" : false;
@@ -795,6 +801,8 @@ class thesis_package_input extends thesis_package {
 					'focus-color' => $o['color'],
 					'background' => $o['background'],
 					'border' => $o['border'])));
+		$options['input']['fields']['font']['fields']['font-family']['options'] =
+			array_merge($options['input']['fields']['font']['fields']['font-family']['options'], array('inherit' => 'inherit'));
 		foreach ($options['focus']['fields'] as $item_name => $item)
 			if (isset($o[$item_name]) && $o[$item_name]['type'] == 'group')
 				foreach ($o[$item_name]['fields'] as $name => $option) {
@@ -810,9 +818,9 @@ class thesis_package_input extends thesis_package {
 		$i = $f = array();
 		$i['width'] = !empty($this->options['width']) ? 'width: ' . $thesis->api->css->number($this->options['width']) . ';' : false;
 		$i['size'] = 'font-size: ' . (!empty($this->options['font-size']) ? $thesis->api->css->number($this->options['font-size']) . ';' : 'inherit;');
-		$i['height'] = !empty($this->options['line-height']) ? 'line-height: ' . $thesis->api->css->number($this->options['line-height']) . ';' : false;
-		$i['family'] = "font-family: " . (!empty($this->options['font-family']) && !empty($thesis->api->css->fonts) && !empty($thesis->api->css->fonts->fonts[$this->options['font-family']]) ?
-			$thesis->api->css->fonts->fonts[$this->options['font-family']]['family'] : 'inherit') . ';';
+		$i['height'] = 'line-height: ' . (!empty($this->options['line-height']) ? $thesis->api->css->number($this->options['line-height']) : '1em') . ';';
+		$i['family'] = "font-family: " . (!empty($this->options['font-family']) && !empty($thesis->api->fonts->list[$this->options['font-family']]) ?
+			$thesis->api->fonts->list[$this->options['font-family']]['family'] : 'inherit') . ';';
 		$i['weight'] = !empty($this->options['font-weight']) ? "font-weight: {$this->options['font-weight']};" : false;
 		$i['style'] = !empty($this->options['font-style']) ? "font-style: {$this->options['font-style']};" : false;
 		$i['variant'] = !empty($this->options['font-variant']) ? "font-variant: {$this->options['font-variant']};" : false;
@@ -828,7 +836,7 @@ class thesis_package_input extends thesis_package {
 			$i['bg-repeat'] = !empty($this->options['background-repeat']) ? "background-repeat: {$this->options['background-repeat']};" : false;
 		}
 		$i['border-width'] = !empty($this->options['border-width']) && ($bw = $thesis->api->css->number($this->options['border-width'])) ? "border-width: $bw;" : false;
-		$i['border-style'] = !empty($this->options['border-style']) ? "border-style: {$this->options['border-style']};" : ($bw ? 'border-style: solid;' : false);
+		$i['border-style'] = !empty($this->options['border-style']) ? "border-style: {$this->options['border-style']};" : (isset($bw) ? 'border-style: solid;' : false);
 		$i['border-color'] = !empty($this->colors['border-color']) ? "border-color: {$this->colors['border-color']};" : false;
 		$i['margin'] = $thesis->api->css->trbl('margin', array(
 			'margin-top' => !empty($this->options['margin-top']) ? $this->options['margin-top'] : '',
@@ -850,7 +858,7 @@ class thesis_package_input extends thesis_package {
 			$f['bg-repeat'] = !empty($this->options['focus-background-repeat']) ? "background-repeat: {$this->options['focus-background-repeat']};" : false;
 		}
 		$f['border-width'] = ($bw = $thesis->api->css->number((!empty($this->options['focus-border-width']) ? $this->options['focus-border-width'] : ''))) ? "border-width: $bw;" : false;
-		$f['border-style'] = !empty($this->options['focus-border-style']) ? "border-style: {$this->options['focus-border-style']};" : ($bw ? 'border-style: solid;' : false);
+		$f['border-style'] = !empty($this->options['focus-border-style']) ? "border-style: {$this->options['focus-border-style']};" : (isset($bw) ? 'border-style: solid;' : false);
 		$f['border-color'] = !empty($this->colors['focus-border-color']) ? "border-color: {$this->colors['focus-border-color']};" : false;
 		if (is_array($i = array_filter($i)) && !empty($i))
 			$css['input'] = "$this->selector { " . implode(' ', $i) . " }";
@@ -912,8 +920,8 @@ class thesis_package_wp_widgets extends thesis_package {
 				$thesis->api->css->number($this->options["$e-line-height"]) :
 				"{$height[$e]}px") . ';';
 			$prop[$e]['family'] = !empty($this->options["$e-font-family"]) ? ($this->options["$e-font-family"] == 'inherit' ?
-				"font-family: inherit;" : (!empty($thesis->api->css->fonts) && !empty($thesis->api->css->fonts->fonts[$this->options["$e-font-family"]]) ?
-				"font-family: {$thesis->api->css->fonts->fonts[$this->options["$e-font-family"]]['family']};" : false)) : false;
+				"font-family: inherit;" : (!empty($thesis->api->fonts->list[$this->options["$e-font-family"]]) ?
+				"font-family: {$thesis->api->fonts->list[$this->options["$e-font-family"]]['family']};" : false)) : false;
 			$prop[$e]['weight'] = !empty($this->options["$e-font-weight"]) ? "font-weight: " . $this->options["$e-font-weight"] . ";" : false;
 			$prop[$e]['style'] = !empty($this->options["$e-font-style"]) ? "font-style: " . $this->options["$e-font-style"] . ";" : false;
 			$prop[$e]['variant'] = !empty($this->options["$e-font-variant"]) ? "font-variant: " . $this->options["$e-font-variant"] . ";" : false;

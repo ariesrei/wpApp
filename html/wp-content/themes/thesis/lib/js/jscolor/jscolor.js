@@ -346,11 +346,11 @@ var jscolor = {
 		this.pickerCloseText = 'Close';
 		this.pickerButtonColor = 'ButtonText'; // px
 		this.pickerFace = 10; // px
-		this.pickerFaceColor = 'ThreeDFace'; // CSS color
+		this.pickerFaceColor = '#ffffff'; // CSS color
 		this.pickerBorder = 1; // px
-		this.pickerBorderColor = 'ThreeDHighlight ThreeDShadow ThreeDShadow ThreeDHighlight'; // CSS color
+		this.pickerBorderColor = 'rgb(187, 187, 187)'; // CSS color
 		this.pickerInset = 1; // px
-		this.pickerInsetColor = 'ThreeDShadow ThreeDHighlight ThreeDHighlight ThreeDShadow'; // CSS color
+		this.pickerInsetColor = 'rgb(187, 187, 187)'; // CSS color
 		this.pickerZIndex = 10000;
 
 
@@ -370,36 +370,44 @@ var jscolor = {
 
 		this.showPicker = function() {
 			if(!isPickerOwner()) {
+
 				var tp = jscolor.getElementPos(target); // target pos
 				var ts = jscolor.getElementSize(target); // target size
 				var vp = jscolor.getViewPos(); // view pos
 				var vs = jscolor.getViewSize(); // view size
 				var ps = getPickerDims(this); // picker size
 				var a, b, c;
+
 				switch(this.pickerPosition.toLowerCase()) {
 					case 'left': a=1; b=0; c=-1; break;
 					case 'right':a=1; b=0; c=1; break;
 					case 'top':  a=0; b=1; c=-1; break;
 					default:     a=0; b=1; c=1; break;
 				}
+
 				var l = (ts[b]+ps[b])/2;
 
 				// picker pos
 				if (!this.pickerSmartPosition) {
 					var pp = [
 						tp[a],
-						tp[b]+ts[b]-l+l*c
+						tp[b] + ts[b] - l + l * c
 					];
 				} else {
 					var pp = [
-						-vp[a]+tp[a]+ps[a] > vs[a] ?
-							(-vp[a]+tp[a]+ts[a]/2 > vs[a]/2 && tp[a]+ts[a]-ps[a] >= 0 ? tp[a]+ts[a]-ps[a] : tp[a]) :
+						-vp[a] + tp[a] + ps[a] > vs[a] ?
+							(-vp[a] + tp[a] + ts[a] / 2 > vs[a] / 2 && tp[a] + ts[a] - ps[a] >= 0 ? tp[a] + ts[a] - ps[a] : tp[a]) :
 							tp[a],
-						-vp[b]+tp[b]+ts[b]+ps[b]-l+l*c > vs[b] ?
-							(-vp[b]+tp[b]+ts[b]/2 > vs[b]/2 && tp[b]+ts[b]-l-l*c >= 0 ? tp[b]+ts[b]-l-l*c : tp[b]+ts[b]-l+l*c) :
-							(tp[b]+ts[b]-l+l*c >= 0 ? tp[b]+ts[b]-l+l*c : tp[b]+ts[b]-l-l*c)
+						-vp[b] + tp[b] + ts[b] + ps[b] - l + l * c > vs[b] ?
+							(-vp[b] + tp[b] + ts[b] / 2 > vs[b] / 2 && tp[b] + ts[b] - l - l * c >= 0 ? tp[b] + ts[b] - l - l * c : tp[b] + ts[b] - l + l * c) :
+							(tp[b] + ts[b] - l + l * c >= 0 ? tp[b] + ts[b] - l + l * c : tp[b] + ts[b] - l - l * c)
 					];
 				}
+
+				if(document.getElementsByTagName('body')[0].classList.contains('no-scroll')) {
+					pp[b] = pp[b] + window.pageYOffset;
+				}
+
 				drawPicker(pp[a], pp[b]);
 			}
 		};
@@ -645,6 +653,7 @@ var jscolor = {
 			p.boxB.style.border = THIS.pickerBorder+'px solid';
 			p.boxB.style.borderColor = THIS.pickerBorderColor;
 			p.boxB.style.background = THIS.pickerFaceColor;
+			p.boxB.style.borderRadius = '3px';
 
 			// pad image
 			p.pad.style.width = jscolor.images.pad[0]+'px';

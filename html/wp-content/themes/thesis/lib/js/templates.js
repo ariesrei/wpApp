@@ -1,4 +1,8 @@
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
 var thesis_templates;
 (function($) {
 thesis_templates = {
@@ -10,10 +14,23 @@ thesis_templates = {
 			thesis_templates.save();
 			return false;
 		});
+		$('body').keydown(function(e){
+			return thesis_templates.maybe_save(e);
+		});
 	},
 	manager: function() {
-		$('.edit_templates').click(function() { $(this).toggleClass('active_manager'); $('#t_template_manager').slideToggle(200); });
-		$('.toggle_child_templates').click(function() { $(this).siblings('.child_templates').toggle(); });
+		$('#template').click(function() { $(this).toggleClass('active'); $('#t_template_manager').slideToggle(50); });
+		$('.toggle_child_templates').click(function() {
+			if ($(this).hasClass('toggled')) {
+				$(this).removeClass('toggled');
+				$(this).html('&#8862;');
+			}
+			else {
+				$(this).addClass('toggled');
+				$(this).html('&#8863;');
+			}
+			$(this).siblings('.child_templates').toggle();
+		});
 		$('.edit_template').click(function() {
 			thesis_templates.change($(this).attr('data-template'));
 			return false;
@@ -78,24 +95,52 @@ thesis_templates = {
 		});
 	},
 	copy: function(to, from) {
-		if (!to || !from || !confirm("Are you sure you want to replace this template by copying from an existing one? This cannot be undone.")) return;
+		if (!to || !from || !confirm('Are you sure you want to replace this template by copying from an existing one? This cannot be undone.')) return;
+		$('#copy_template').prop('disabled', true);
 		$.post(thesis_ajax.url, { action: 'copy_template', to: to, from: from, nonce: $('#_wpnonce-thesis-ajax').val() }, function(copied) {
+			$('#copy_template').prop('disabled', false);
 			if (copied) {
 				thesis_templates.change(to, { id: 'template_copied', message: copied });
-				if ($('#current_template').val() == thesis_editor.canvas.template)
+				if (typeof thesis_editor.canvas == 'object' && $('#current_template').val() == thesis_editor.canvas.template)
 					thesis_editor.canvas.window.location.reload(true);
 			}
 		});
 	},
-	save: function() {
+	save: function(external) {
+		var position = $('#save_template').outerWidth()+11+'px';
+		$('#save_template').prop('disabled', true);
+		$('#saving_template').css({'right': position}).show();
 		$.post(thesis_ajax.url, { action: 'save_template', template: $('#current_template').val(), form: $('#t_boxes').serialize() }, function(saved) {
-			if ($('#current_template').val() == thesis_editor.canvas.template && thesis_editor.canvas.window != null)
-				thesis_editor.canvas.window.location.reload(true);
-			$('#t_html').append(saved);
-			$('#template_saved').css({'right': $('#save_template').outerWidth()+11+'px'});
-			$('#template_saved').fadeOut(3000, function() { $(this).remove(); });
-			thesis_ui.box_form.reset();
+			if (external == true) {
+				thesis_editor.login.templates_saved = true;
+			}
+			else {
+				if (typeof thesis_editor.canvas == 'object' && $('#current_template').val() == thesis_editor.canvas.template && thesis_editor.canvas.window != null)
+					thesis_editor.canvas.window.location.reload(true);
+				$('#saving_template').hide();
+				if ($('#template_saved').length === 0) {
+					$('#t_html').append(saved);
+					$('#template_saved').css({'right': position});
+					$('#template_saved').fadeOut(3000, function() {
+						$(this).remove();
+						$(this).promise().done(function() {
+							$('#save_template').prop('disabled', false);
+						});
+					});
+				}
+				thesis_ui.box_form.reset();
+			}
 		});
+	},
+	maybe_save: function(e) {
+		if ($('#t_html').css('display') == 'block' && e.keyCode == 83) {
+			// separate different OS
+			if ((/Mac/i.test(navigator.userAgent) && e.metaKey) || (/Win/i.test(navigator.userAgent) && e.ctrlKey)) {
+				thesis_templates.save();
+				return false;
+			}
+		}
+		return true;
 	}
 };
 $(document).ready(function($){ thesis_templates.init(); });

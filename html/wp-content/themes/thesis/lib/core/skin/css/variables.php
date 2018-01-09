@@ -1,5 +1,9 @@
 <?php
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
 class thesis_css_variables {
 	public $items = array();		// (array) saved/active variables
 	private $symbol = '$';			// (string) character symbol to use as variable delimiter
@@ -39,12 +43,18 @@ class thesis_css_variables {
 	public function items($depth) {
 		global $thesis;
 		$tab = str_repeat("\t", $depth);
+		$items = array();
 		$list = '';
-		foreach ($this->items as $id => $item)
+		foreach ($this->items as $id => $var)
+			$items[$id] = $var['ref'];
+		natcasesort($items);
+		foreach ($items as $id => $name) {
+			$item = $this->items[$id];
 			$list .=
 				"$tab\t<li>".
-				"<a class=\"t_edit_item\" href=\"\" data-type=\"var\" data-id=\"$id\" data-tooltip=\"" . $thesis->api->esc($item['css']) . '" title="'. esc_attr($thesis->api->strings['click_to_edit']) . '">' . $thesis->api->esch($item['name']) . " <code>$this->symbol" . $thesis->api->esch($item['ref']) . '</code></a>'.
+				"<code class=\"t_edit_item css_draggable\" data-type=\"var\" data-id=\"$id\" data-value=\"$this->symbol". esc_attr($item['ref']). "\" data-tooltip=\"". $thesis->api->efn($item['name']). ' &rarr; '. esc_attr($item['css']). '" title="'. $thesis->api->ef0($thesis->api->strings['click_to_edit']). "\">$this->symbol". esc_attr($item['ref']). '</code>'.
 				"</li>\n";
+		}
 		return
 			"$tab<ul class=\"t_item_list\">\n".
 			$list.
@@ -73,9 +83,9 @@ class thesis_css_variables {
 			"\t\t\t<button class=\"delete_options\" data-style=\"button delete\">{$thesis->api->strings['delete']}</button>\n".
 			"\t\t</div>\n".
 			"\t</div>\n".
-			"\t<input type=\"hidden\" id=\"t_var_id\" name=\"id\" value=\"$id\" />\n".
+			"\t<input type=\"hidden\" id=\"t_var_id\" name=\"id\" value=\"". esc_attr($id). "\" />\n".
 			"\t<input type=\"hidden\" id=\"t_var_symbol\" name=\"symbol\" value=\"$this->symbol\" />\n".
-			"\t" . wp_nonce_field('thesis-save-css-variable', '_wpnonce-thesis-save-css-variable', true, false) . "\n".
+			"\t". wp_nonce_field('thesis-save-css-variable', '_wpnonce-thesis-save-css-variable', true, false). "\n".
 			"</form>\n";
 	}
 
@@ -84,7 +94,7 @@ class thesis_css_variables {
 		$thesis->wp->nonce($_POST['nonce'], 'thesis-save-css');
 		$item = $_POST['item'];
 		if (empty($item)) return;
-		$id = $item['id'] == 'new' ? 'var_' . time() : $item['id'];
+		$id = $item['id'] == 'new' ? 'var_'. time() : $item['id'];
 		echo $this->form($id);
 		if ($thesis->environment == 'ajax') die();
 	}
@@ -104,11 +114,35 @@ class thesis_css_variables {
 		return $this->items;
 	}
 
+	public function update($vars) {
+		$update = array();
+		foreach ($this->items as $id => $item)
+			if (!empty($item['ref']))
+				$update[$item['ref']] = $id;
+		foreach ($vars as $ref => $value)
+			if (!empty($update[$ref]))
+				$this->items[$update[$ref]]['css'] = $value;
+		return $this->items;
+	}
+
+	public function reset($vars) {
+		return ($this->items = $vars);
+	}
+
+	public function css($css) {
+		foreach ($this->items as $id => $var)
+			$this->css[$var['ref']] = $this->scrub[$var['ref']] = $var['css'];
+		$this->scrub($this->scrub);
+		foreach ($this->scrubbed as $ref => $var_css)
+			$css = preg_replace("/\\{$this->symbol}$ref". '((?=[\s\r\n;}\)])|\Z)/i', $var_css, $css);
+		return $css;
+	}
+
 	private function scrub($to_scrub) {
 		if (!(is_array($to_scrub) && !empty($to_scrub))) return;
 		foreach ($to_scrub as $ref => $css) {
 			if (strpos($css, $this->symbol) !== false)
-				$this->scrub[$ref] = preg_replace_callback("/\\{$this->symbol}" . '[A-Za-z0-9-_]+' . '((?=[\\$\s\r\n;}])|\Z)/i', array($this, 'replace'), $css);
+				$this->scrub[$ref] = preg_replace_callback("/\\{$this->symbol}". '[A-Za-z0-9-_]+'. '((?=[\\$\s\r\n;}\)])|\Z)/i', array($this, 'replace'), $css);
 			else {
 				if (isset($this->scrub[$ref]))
 					unset($this->scrub[$ref]);
@@ -123,14 +157,5 @@ class thesis_css_variables {
 		return is_array($matches) && !empty($matches[0]) && ($ref = trim($matches[0], $this->symbol)) ? (array_key_exists($ref, $this->scrubbed) ?
 			$this->scrubbed[$ref] : (array_key_exists($ref, $this->css) ?
 			$this->css[$ref] : '')) : '';
-	}
-
-	public function css($css) {
-		foreach ($this->items as $id => $var)
-			$this->css[$var['ref']] = $this->scrub[$var['ref']] = stripslashes($var['css']);
-		$this->scrub($this->scrub);
-		foreach ($this->scrubbed as $ref => $var_css)
-			$css = preg_replace("/\\{$this->symbol}$ref" . '((?=[\s\r\n;}])|\Z)/i', $var_css, $css);
-		return $css;
 	}
 }

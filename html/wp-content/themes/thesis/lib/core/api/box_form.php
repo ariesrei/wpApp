@@ -1,18 +1,25 @@
 <?php
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
 class thesis_box_form extends thesis_form_api {
-	private $used = array();
+	private $boxes = array();		// filtered array of box objects applicable to the current form
+	private $active = array();		// array of all box ids that will be output in the active area of the current form
+	private $add = array();			// array of box objects eligible to be added via the Add Box mechanism
+	private $used = array();		// array used in queue output
+	private $tabindex = 10;			// tabindex for consistent input tabbing
 
 	public function body($args = array()) {
 		if (empty($args)) return;
 		extract($args);
-		$this->boxes = is_array($boxes) ? $boxes : array();			// filtered array of box objects applicable to the current form
-		$this->active = is_array($active) ? $active : array();		// array of all box ids that will be output in the active area of the current form
-		$this->add = is_array($add) ? $add : array();				// array of box objects eligible to be added via the Add Box mechanism
-		$this->used = array();										// array used in queue output
-		$this->tabindex = is_numeric($tabindex) ? $tabindex : 10;	// tabindex for consistent input tabbing
-		$root = !empty($root) ? $root : false;						// root box for the current form
-		$depth = is_numeric($depth) ? $depth : 0;					// parameter for perfectly indented output
+		$this->boxes = !empty($boxes) && is_array($boxes) ? $boxes : $this->boxes;			
+		$this->active = !empty($active) && is_array($active) ? $active : $this->active;		
+		$this->add = !empty($add) && is_array($add) ? $add : $this->add;			
+		$this->tabindex = !empty($tabindex) && is_numeric($tabindex) ? $tabindex : $this->tabindex;	
+		$root = !empty($root) ? $root : false;		// root box for the current form
+		$depth = !empty($depth) && is_numeric($depth) ? $depth : 0;	// parameter for perfectly indented output
 		$tab = str_repeat("\t", $depth);
 		return
 			"$tab<div id=\"boxes\" data-style=\"box\">\n".
@@ -20,17 +27,17 @@ class thesis_box_form extends thesis_form_api {
 			$this->box($this->boxes[$root], $depth + 1) : '').
 			"$tab</div>\n".
 			"$tab<div id=\"queues\">\n".
-			$this->queue($depth + 1).
-			$this->add_boxes($depth + 1).
+			$this->box_manager($depth + 1).
 			$this->delete_boxes($depth + 1).
 			"$tab</div>\n";
 	}
 
-	private function box($box, $depth) {
-		if (!is_object($box) || in_array($box->_id, $this->used)) return;
+	public function box($box, $depth) {
+		global $thesis;
+		if (!is_object($box) || in_array($box->_id, $this->used) || $box->type === 'false') return;
 		$tab = str_repeat("\t", $depth);
 		$classes = array();
-		$rotator = $sortable = $tray_boxes = $tray_output = '';
+		$rotator = $sortable = $tray_boxes = $tray = '';
 		$root = $box->root ? ' id="box_root" data-root="true"' : '';
 		$classes['type'] = $box->type;
 		$classes['draggable'] = 'draggable';
@@ -43,43 +50,52 @@ class thesis_box_form extends thesis_form_api {
 		elseif ($box->type == 'box' && !$box->_parent)
 			$classes['core'] = 'core_box';
 		$classes = !empty($classes) ? implode(' ', $classes) : '';
-		$title = ($box->_lineage ? $box->_lineage : '') . ($box->name ? $box->name : $box->title);
+		$title = $thesis->api->efn(($box->_lineage ? $box->_lineage : ''). ($box->name ? trim($box->name) : $box->title));
 		$toggle = $box->type == 'rotator' && !$box->root ?
-			"<span class=\"toggle_box" . ($box->_switch ? ' toggled' : '') . "\" data-style=\"toggle\" title=\"" . __('show/hide box contents', 'thesis') . "\">&nbsp;</span>" :
+			"<span class=\"toggle_box". ($box->_switch ? ' toggled' : ''). "\" data-style=\"toggle\" title=\"". __('show/hide box contents', 'thesis'). "\">&#8862;</span>" :
 			'';
-		$switch = method_exists($box, 'options') || !empty($box->_admin) ? ' <span class="switch_options" data-style="switch" title="' . __('show/hide box options', 'thesis') . '">S</span>' : '';
+		$switch = method_exists($box, 'html_options') ||
+			(($box->head || (empty($box->head) && apply_filters('thesis_editor_box_options', false))) && (is_array($options = $box->_options()) && !empty($options))) ||
+			!empty($box->_uploader) ||
+			(is_array($html_admin = $box->_html_admin()) && !empty($html_admin)) ?
+			' <span class="switch_options" data-style="switch" title="'. __('show box options', 'thesis'). '">&#9881;</span>' : '';
 		if ($box->type == 'rotator') {
-			$boxes = property_exists($box, '_boxes') && is_array($box->_boxes) ? $box->_boxes : (property_exists($box, '_startup') && is_array($box->_startup) ? $box->_startup : array());
+			$boxes = !empty($box->_boxes) ?
+				$box->_boxes : (!empty($box->_startup) ?
+				$box->_startup : array());
 			foreach ($boxes as $item => $id)
-				if (!empty($this->boxes[$id]))
-					$sortable .= $this->box($this->boxes[$id], $depth + 2);
-			if (property_exists($box, '_children') && is_array($box->_children)) {
-				$children = !empty($boxes) ? array_diff($box->_children, $boxes) : $box->_children;
+				$sortable .= $this->box(!empty($this->boxes[$id]) ?
+					$this->boxes[$id] : (!empty($box->_add_boxes[$id]) ?
+					$box->_add_boxes[$id] : false), $depth + 2);
+			if (!empty($box->_dependents)) {
+				$children = !empty($boxes) ? array_diff($box->_dependents, $boxes) : $box->_dependents;
 				foreach ($children as $child)
-					if (!is_array($this->active) || !in_array($child, $this->active))
-						$tray_boxes .= $this->box($this->boxes[$child], $depth + 3);
-				$tray_output =
+					if (!in_array($child, $this->active))
+						$tray_boxes .= $this->box(!empty($this->boxes[$child]) ?
+							$this->boxes[$child] : (!empty($box->_add_boxes[$child]) ?
+							$box->_add_boxes[$child] : false), $depth + 3);
+				$tray =
 					"$tab\t<div class=\"tray\">\n".
-					"$tab\t\t<h5>" . __('Drop green boxes here to hide them in the tray.', 'thesis') . "</h5>\n".
+					"$tab\t\t<h5>". __('Drop orange boxes here to hide them in the tray.', 'thesis'). "</h5>\n".
 					"$tab\t\t<div class=\"tray_body\">\n".
-					"$tab\t\t\t<p class=\"tray_instructions\">" . __('Click on a box to add it to the active area above', 'thesis') . "</p>\n".
+					"$tab\t\t\t<p class=\"tray_instructions\">". __('Click on a box to add it to the active area above', 'thesis'). "</p>\n".
 					"$tab\t\t\t<div class=\"tray_list\">\n".
 					$tray_boxes.
 					"$tab\t\t\t</div>\n".
 					"$tab\t\t</div>\n".
-					"$tab\t\t<div class=\"tray_bar\"><span class=\"toggle_tray\" title=\"" . __('show/hide tray', 'thesis') . "\">" . __('show tray &darr;', ' thesis') . "</span></div>\n".
+					"$tab\t\t<div class=\"tray_bar\"><span class=\"toggle_tray\" title=\"". __('show/hide tray', 'thesis'). "\">". __('show tray &darr;', ' thesis'). "</span></div>\n".
 					"$tab\t</div>\n";
 			}
 			$rotator =
 				"$tab\t<div class=\"sortable\">\n".
 				$sortable.
 				"$tab\t</div>\n".
-				$tray_output;
+				$tray;
 		}
 		$this->used[] = $box->_id;
 		return
 			"$tab<div$root data-id=\"$box->_id\" data-class=\"$box->_class\" class=\"$classes\">\n".
-			"$tab\t<h4>$toggle<span id=\"$box->_id\">$title</span>$switch</h4>\n".
+			"$tab\t<h4>$toggle<span class=\"box_name\" id=\"$box->_id\">$title</span>$switch</h4>\n".
 			$rotator.
 			"$tab</div>\n".
 			$this->options($box, $depth);
@@ -99,64 +115,75 @@ class thesis_box_form extends thesis_form_api {
 				'tabindex' => !empty($this->tabindex) ? $this->tabindex : false);
 			$this->tabindex++;
 		}
-		if (is_array($options = $box->_get_options()) && !empty($options)) {
+		if (!empty($box->_uploader)) {
+			$menu['uploader'] = __('Uploader', 'thesis');
+			$fields['uploader'] = $this->fields($box->_uploader, array(), "{$box->_class}_{$box->_id}_", "{$box->_class}[$box->_id]", !empty($this->tabindex) ? $this->tabindex : false, $depth + 4);
+			$this->tabindex = $fields['uploader']['tabindex'];
+			$panes['uploader'] = $fields['uploader']['output'];
+		}
+		if (is_array($html = $box->_html_options()) && !empty($html)) {
+			$menu['html'] = $thesis->api->base['html'];
+			$fields['html'] = $this->fields($html, $box->options, "{$box->_class}_{$box->_id}_", "{$box->_class}[$box->_id]", !empty($this->tabindex) ? $this->tabindex : false, $depth + 4);
+			$this->tabindex = $fields['html']['tabindex'];
+			$panes['html'] = $fields['html']['output'];
+		}
+		if (($box->head || (empty($box->head) && apply_filters('thesis_editor_box_options', false))) && (is_array($options = $box->_options(true)) && !empty($options))) {
 			$menu['options'] = __('Options', 'thesis');
 			$fields['options'] = $this->fields($options, $box->options, "{$box->_class}_{$box->_id}_", "{$box->_class}[$box->_id]", !empty($this->tabindex) ? $this->tabindex : false, $depth + 4);
 			$this->tabindex = $fields['options']['tabindex'];
 			$panes['options'] = $fields['options']['output'];
 		}
-		if (!empty($box->_admin)) {
+		if (is_array($html_admin = $box->_html_admin()) && !empty($html_admin)) {
 			$menu['admin'] = __('Admin', 'thesis');
-			$fields['admin'] = $this->fields($box->_admin, $box->options, "{$box->_class}_{$box->_id}_", "{$box->_class}[$box->_id]", $this->tabindex, $depth + 4);
+			$fields['admin'] = $this->fields($html_admin, $box->options, "{$box->_class}_{$box->_id}_", "{$box->_class}[$box->_id]", $this->tabindex, $depth + 4);
 			$this->tabindex = $fields['admin']['tabindex'];
 			$panes['admin'] = $fields['admin']['output'];
 		}
 		return $thesis->api->popup(array(
 			'id' => $box->_id,
 			'type' => $box->_parent ? "{$type}_child" : $type,
-			'title' => $box->title,
+			'title' => ($box->_lineage ? $box->_lineage : ''). $box->title,
 			'name' => $name,
 			'menu' => $menu,
 			'panes' => $panes,
 			'depth' => $depth));
 	}
 
-	private function queue($depth) {
+	private function box_manager($depth) {
+		global $thesis;
 		$tab = str_repeat("\t", $depth);
-		$queue = '';
+		$classes = array();
+		$queue = array(
+			'intro' => array(
+				'' => __('Select a Box to add:', 'thesis')),
+			'unused' => array(),
+			'add' => array());
 		foreach ($this->boxes as $id => $box)
 			if (!in_array($id, $this->used) && !$box->_parent)
-				$queue .= $this->box($box, $depth + 3);
-		return
-			"$tab<div data-id=\"queue\" id=\"box_queue\" class=\"rotator visible\" data-style=\"box\">\n".
-			"$tab\t<h4>" . __('<kbd>shift</kbd> + drag boxes here to remove them from the page', 'thesis') . "</h4>\n".
-			"$tab\t<div class=\"sortable\">\n".
-			$queue.
-			"$tab\t</div>\n".
-			"$tab</div>\n";
-	}
-
-	private function add_boxes($depth) {
-		if (empty($this->add)) return;
-		$tab = str_repeat("\t", $depth);
-		$boxes = array('' => __('Type of box to add:', 'thesis'));
-		foreach ($this->add as $class => $box)
-			$boxes[$class] = $box->title;
-		$fields = array(
-			'box_class' => array(
+				$queue['unused'][$id] = $thesis->api->ef0(!empty($box->name) ? $box->name : $box->title);
+		natcasesort($queue['unused']);
+		if (!empty($this->add)) {
+			foreach ($this->add as $class => $box)
+				$classes[$class] = $thesis->api->ef0($box->title);
+			natcasesort($classes);
+			foreach ($classes as $class => $title)
+				$queue['add'][$class] = "* $title";
+		}
+		if (!empty($queue['add']))
+			$queue['intro']['*'] = __('* indicates a new Box', 'thesis');
+		$queue = array_merge($queue['intro'], $queue['unused'], $queue['add']);
+		$add = $this->fields(array(
+			'box_id' => array(
 				'type' => 'select',
-				'options' => $boxes),
-			'box_name' => array(
-				'type' => 'text',
-				'label' => __('New Box Name <span class="optional">optional</span>', 'thesis')));
-		$fields = $this->fields($fields, false, false, false, $this->tabindex, $depth + 1);
+				'options' => $queue)), array(), false, false, $this->tabindex, $depth + 2);
 		return
-			"$tab<div id=\"add_boxes\" class=\"rotator visible\">\n".
-			"$tab\t<h4>Add Boxes <span>(drag me around!)</span></h4>\n".
-			$fields['output'].
-			"$tab\t" . wp_nonce_field('thesis-add-box', '_wpnonce-thesis-add-box', true, false) . "\n".
-			"$tab\t<input type=\"submit\" id=\"add_box\" data-style=\"button action\" name=\"add_box\" value=\"" . __('Add Box', 'thesis') . "\" />\n".
-			"$tab\t<p class=\"add_box_instructions\"><kbd>shift</kbd> + drag boxes to move them!</p>\n".
+			"$tab<div id=\"box_manager\">\n".
+			"$tab\t<p id=\"remove_boxes\" class=\"dropzone\"><kbd>shift</kbd> + ". __('drag boxes here to remove them from the page', 'thesis'). "</p>\n".
+			"$tab\t<div id=\"add_box_form\">\n".
+			$add['output'].
+			"$tab\t\t". wp_nonce_field('thesis-add-box', '_wpnonce-thesis-add-box', true, false). "\n".
+			"$tab\t\t<input type=\"submit\" id=\"add_box\" data-style=\"button action\" name=\"add_box\" value=\"". __('Add Box', 'thesis'). "\" />\n".
+			"$tab\t</div>\n".
 			"$tab\t<div class=\"sortable\">\n".
 			"$tab\t</div>\n".
 			"$tab</div>\n";
@@ -167,7 +194,7 @@ class thesis_box_form extends thesis_form_api {
 		$tab = str_repeat("\t", $depth);
 		return
 			"$tab<div id=\"delete_boxes\" class=\"rotator visible\">\n".
-			"$tab\t<h4>" . __('<kbd>shift</kbd> + drag blue and white boxes here to delete them on save', 'thesis') . "</h4>\n".
+			"$tab\t<h4 class=\"dropzone\">" . __('<kbd>shift</kbd> + drag blue and white boxes here to delete them on save', 'thesis') . "</h4>\n".
 			"$tab\t<div class=\"delete_warning\">\n".
 			"$tab\t\t<p>" .  __('<strong>Warning:</strong> Deleted boxes will be removed from ALL templates!', 'thesis') . "</p>\n".
 			"$tab\t</div>\n".
@@ -176,35 +203,10 @@ class thesis_box_form extends thesis_form_api {
 			"$tab</div>\n";
 	}
 
-	public function add_box($box) {
-		if (!is_object($box)) return;
-		$this->boxes[$box->_id] = $box;
-		if ($box->dependents)
-			foreach ($box->dependents as $class)
-				$this->add_dependent($class, $box->_id);
-		echo $this->box($box, 4);
-	}
-
-	private function add_dependent($class, $parent) {
-		$lineage = $parent ? (($this->boxes[$parent]->_lineage ? $this->boxes[$parent]->_lineage : '') . ($this->boxes[$parent]->name ? $this->boxes[$parent]->name : $this->boxes[$parent]->title) . " &rarr; ") : false;
-		$box = new $class(array('parent' => $parent, 'lineage' => $lineage));
-		$this->boxes[$box->_id] = $box;
-		if ($box->_parent) {
-			$this->boxes[$parent]->_children[] = $box->_id;
-			if (is_array($this->boxes[$box->_parent]->children) && in_array($class, $this->boxes[$box->_parent]->children))
-				$this->boxes[$box->_parent]->_startup[] = $box->_id;
-		}
-		if (is_array($box->dependents))
-			foreach ($box->dependents as $dependent_class)
-				$this->add_dependent($dependent_class, $box->_id);
-		if (is_array($this->boxes[$parent]->_startup))
-			$this->active[$parent] = $this->boxes[$parent]->_startup;
-	}
-
 	public function save($form) {
 		if (!is_array($form)) return false;
 		$boxes = array();
-		$rotators = is_array($form['boxes']) ? $form['boxes'] : array();
+		$rotators = isset($form['boxes']) && is_array($form['boxes']) ? $form['boxes'] : array();
 		$delete = isset($form['delete_boxes']) && is_array($form['delete_boxes']) ? $form['delete_boxes'] : array();
 		foreach ($rotators as $id => $inner_boxes)
 			if ($id != 'queue' && !in_array($id, $delete) && is_array($inner_boxes))

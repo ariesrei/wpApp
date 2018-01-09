@@ -1,39 +1,93 @@
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
 var thesis_ui;
 (function($) {
 thesis_ui = {
 	box_form: {
 		init: function() {
 			$('#t_boxes .rotator').each(function() { thesis_ui.box.rotator(this); });
-			thesis_ui.box_form.queues();
+			thesis_ui.box_form.manager();
 			$('#t_boxes .switch_options').each(function() { thesis_ui.box.options(this); });
 		},
-		queues: function() {
-			$('#queues').children('.rotator').children('.sortable').sortable('option', 'disabled', false);
-			$('#add_boxes').draggable({ containment: '#t_boxes', handle: '> h4', stop: function() {
-				if (parseInt($('#add_boxes').css('top')) < -(parseInt($('#box_queue').css('height')) + 24))
-					$('#add_boxes').css('top', -(parseInt($('#box_queue').css('height')) + 24) + 'px');
-			}});
-			$('#add_boxes').children('h4').droppable('option', 'disabled', true);
-			$('#box_class').change(function() {
-				var fields = $(this).parent().parent().siblings('.option_field').add($(this).parent().parent().siblings('#add_box'));
-				if ($(this).val()) $(fields).show();
-				else $(fields).hide();
+		manager: function() {
+			thesis_ui.box_form.draggable('#box_manager');
+			thesis_ui.box_form.draggable('#delete_boxes');
+			thesis_ui.box.sortable('#box_manager > .sortable');
+			thesis_ui.box_form.removable('#remove_boxes');
+			thesis_ui.box.deletable('#delete_boxes .dropzone');
+			$('#box_id').change(function() {
+				if ($(this).val() && $(this).val() != '*') $('#add_box').show();
+				else $('#add_box').hide();
 			});
 			$('#add_box').click(function() {
-				thesis_ui.box.add({ class: $('#box_class').val(), name: $('#box_name').val() });
-				$(this).siblings('.option_field').children().children('input[type="text"]').add($('#box_class')).val('');
-				$(this).siblings('.option_field').add($(this)).hide();
-				$(this).siblings('.option_field:first').show();
+				thesis_ui.box_form.add($('#box_id').val());
+				$('#box_id').val('');
+				$(this).hide();
 				return false;
 			});
-			$('#delete_boxes').draggable({ containment: '#queues', handle: '> h4', stop: function() {
-				var top = parseInt($('#delete_boxes').css('top')),
-					should = parseInt($('#box_queue').css('height')) + 24;
-				if (top < -(should))
-					$('#delete_boxes').css('top', -should + 'px');
-			}});
-			$('#delete_boxes').children('h4').each(function() { thesis_ui.box.deletable(this); });
+			$('#box_manager > .sortable').sortable('option', 'disabled', false);			
+		},
+		draggable: function (draggable) {
+			$(draggable).draggable({
+				containment: '#t_boxes',
+				handle: '> .dropzone',
+				stop: function() {
+					if (parseInt($(draggable).css('top')) < -(parseInt($('#t_boxes').css('height')) + 24))
+						$(draggable).css('top', -(parseInt($('#t_boxes').css('height')) + 24) + 'px');
+				}
+			});
+		},
+		removable: function (dropzone) {
+			if (!dropzone) return;
+			$(dropzone).droppable({
+				accept: '.draggable',
+				hoverClass: 'accept_box',
+				tolerance: 'pointer',
+				greedy: true,
+				drop: function(event, ui) {
+					thesis_ui.box_form.remove(ui.draggable);
+					ui.draggable.hide(1, function() { $(this).remove(); });
+				}
+			});
+		},
+		remove: function(box) {
+			if (!box) return;
+			var id = $(box).attr('data-id'),
+				name = $(box).children('h4').children('.box_name').html(),
+				add = true;
+			$('#box_id option').each(function() {
+				if ($(this).attr('value') == id)
+					add = false;
+			});
+			if (add)
+				$('#box_id').append('<option value="'+id+'">'+name+'</option>');
+			$('#popup_'+id).remove();
+			$('#delete_box_'+id).remove();
+			if ($(box).hasClass('rotator'))
+				$(box).children('.sortable').children().each(function() {
+					if (!$(this).hasClass('t_popup') && !$(this).hasClass('child'))
+						thesis_ui.box_form.remove(this);
+				});
+		},
+		add: function(id) {
+			$('#add_box').prop('disabled', true);
+			$.post((typeof thesis_ajax == 'object' ? thesis_ajax.url : ajaxurl), { action: 'add_box', id: id, nonce: $('#_wpnonce-thesis-add-box').val() }, function(html) {
+				$('#add_box').prop('disabled', false);
+				$('#box_manager > .sortable').append(html);
+				var box = $('#box_manager > .sortable > .draggable:last');
+				if ($(box).hasClass('rotator')) {
+					thesis_ui.box.rotator(box);
+					$(box).find('.rotator').each(function() { thesis_ui.box.rotator(this); });
+				}
+				$(box).find('h4').each(function() { thesis_ui.box.options($(this).children('.switch_options')); });
+				$('#box_id option').each(function() {
+					if ($(this).attr('value') == id && $(this).html().indexOf('*') != 0)
+						$(this).remove();
+				});
+			});
 		},
 		reset: function() {
 			$('#t_boxes .delete_box_input').remove();
@@ -66,19 +120,32 @@ thesis_ui = {
 						location = parent ? '<input type=\"hidden\" class=\"box_location\" name=\"boxes['+parent+'][]\" value=\"'+box+'\" />' : '';
 					$('#delete_box_'+box).remove();
 					ui.draggable.children('.box_location').remove();
-					ui.draggable.hide(500, function() { $(this).removeAttr('style').prepend(location).prependTo(sortable).show('slow'); });
+					if (event.altKey)
+						ui.draggable.hide(1, function() { $(this).removeAttr('style').prepend(location).appendTo(sortable).show('fast'); });
+					else
+						ui.draggable.hide(1, function() { $(this).removeAttr('style').prepend(location).prependTo(sortable).show('fast'); });
+					$('#popup_'+box).appendTo(sortable);
 				}
 			});
 			$(sortable).children().not('.t_popup').each(function() { thesis_ui.box.init(this); });
 			thesis_ui.box.sortable(sortable);
 			thesis_ui.box.tray(tray);
-			if ($(toggle).hasClass('toggled') || $(rotator).attr('data-root')) {
+			if ($(toggle).hasClass('toggled') || $(rotator).attr('data-root') || $(rotator).attr('id') == 'delete_boxes') {
 				$(sortable).sortable('enable').show();
+				if ($(toggle).hasClass('toggled'))
+					$(toggle).html('&#8863;');
 				if (tray) {
 					$(tray).toggle();
 					$(tray).children('h5').droppable('enable');
 				}
 			}
+			$(h4).on('mouseover', function() {
+				if ($(rotator).parent().attr('id') != 'queues')
+					$(this).add($(sortable)).css({ 'background-color': '#fef8c2' });
+			}).on('mouseout', function() {
+				if ($(rotator).parent().attr('id') != 'queues')
+					$(this).add($(sortable)).css({ 'background-color': '' });
+			});
 			$(toggle).on('click', function() {
 				$(this).toggleClass('toggled');
 				$(sortable).sortable('option', 'disabled', !($(this).hasClass('toggled'))).toggle();
@@ -86,6 +153,10 @@ thesis_ui = {
 					$(tray).toggle();
 					$(tray).children('h5').droppable('option', 'disabled', !($(this).hasClass('toggled')));
 				}
+				if ($(this).hasClass('toggled'))
+					$(this).html('&#8863;');
+				else
+					$(this).html('&#8862;');
 				return false;
 			});
 		},
@@ -104,19 +175,19 @@ thesis_ui = {
 					if (event.shiftKey) {
 						$('.placeholder').hide();
 						if (ui.item.hasClass('draggable')) {
-							$('.ui-droppable').not($('.ui-droppable-disabled').add($('#delete_boxes > h4'))).addClass('can_accept');
+							$('.ui-droppable').not($('.ui-droppable-disabled').add($('.box > h4')).add($('#delete_boxes > h4'))).addClass('can_accept');
 							if (ui.item.hasClass('instance'))
 								$('#delete_boxes > h4').addClass('can_accept');
 						}
 					}
 					else {
-						$('#t_boxes').find('h4').not($('#add_boxes').children('h4')).droppable('disable');
+						$('#t_boxes').find('h4').add($('#remove_boxes')).droppable({ disabled: true });
 						$(this).siblings('.tray').children('h5').addClass('tray_dropper').show();
 					}
 				},
 				stop: function(event,ui) {
 					$(this).siblings('.tray').children('h5').removeClass('tray_dropper').hide();
-					$('#t_boxes').find('h4').not($('#add_boxes').children('h4')).droppable('enable');
+					$('#t_boxes').find('.rotator > h4').add($('#remove_boxes')).droppable('enable');
 					if (ui.item.hasClass('draggable'))
 						$('.ui-droppable').not($('.ui-droppable-disabled')).removeClass('can_accept');
 				}
@@ -134,15 +205,15 @@ thesis_ui = {
 				greedy: true,
 				drop: function(event, ui) {
 					ui.draggable.children('.box_location').remove();
-					ui.draggable.hide(500, function() {
+					ui.draggable.hide(100, function() {
 						thesis_ui.box.dependent(this);
-						$(this).removeAttr('style').prependTo(list).show('slow');
+						$(this).removeAttr('style').prependTo(list).show('fast');
 					});
 				}
 			});
 			$(list).children('.child').each(function() { thesis_ui.box.dependent(this); });
 			$(tray).children('.tray_bar').children('.toggle_tray').on('click', function() {
-				$(body).toggle('slide', '', 300);
+				$(body).slideToggle(100);
 				$(this).toggleClass('tray_on');
 				if ($(this).hasClass('tray_on')) $(this).html('hide tray &uarr;');
 				else $(this).html('show tray &darr;');
@@ -151,10 +222,12 @@ thesis_ui = {
 		},
 		dependent: function(dependent) {
 			$(dependent).on('click', function() {
-				$(this).hide(500, function() {
+				$(this).hide(200, function() {
+					var destination = $(this).parent('.tray_list').parent('.tray_body').parent('.tray').siblings('.sortable');
 					$(this).removeAttr('style').
 					prepend('<input type=\"hidden\" class=\"box_location\" name=\"boxes['+$(this).parent('.tray_list').parent('.tray_body').parent('.tray').parent('.rotator').attr('data-id')+'][]\" value=\"'+$(this).attr('data-id')+'\" />').
-					appendTo($(this).parent('.tray_list').parent('.tray_body').parent('.tray').siblings('.sortable')).show('slow').unbind();
+					appendTo(destination).show('fast').unbind();
+					$('#popup_'+$(this).attr('data-id')).appendTo(destination);
 				});
 				return false;
 			});
@@ -170,84 +243,35 @@ thesis_ui = {
 					var box = ui.draggable.attr('data-id');
 					$('#delete_box_'+box).remove();
 					$('#t_boxes').append('<input type=\"hidden\" class=\"delete_box_input\" id=\"delete_box_'+box+'\" name=\"delete_boxes[]\" value=\"'+box+'\" />');
-					ui.draggable.hide(500, function() { $(this).removeAttr('style').prependTo($(h4).siblings('.sortable')).show('slow'); });
+					ui.draggable.hide(170, function() { $(this).removeAttr('style').prependTo($(h4).siblings('.sortable')).show('fast'); });
 				}
-			});
-		},
-		add: function(box) {
-			$.post(thesis_ajax.url, { action: 'add_box', box: box, nonce: $('#_wpnonce-thesis-add-box').val() }, function(html) {
-				$('#add_boxes > .sortable').append(html);
-				var new_box = $('#add_boxes > .sortable > .instance:last');
-				if ($(new_box).hasClass('rotator')) {
-					thesis_ui.box.rotator(new_box);
-					$(new_box).find('.rotator').each(function() { thesis_ui.box.rotator(this); });
-				}
-				$(new_box).find('h4').each(function() { thesis_ui.box.options($(this).children('.switch_options')); });
 			});
 		}
 	},
 	popup: function(popup) {
+		if (!$(popup).is('*')) return;
 		$('body').addClass('no-scroll');
 		$(popup).show();
 		$(popup).find('input, select').keypress(function(event) { return event.keyCode != 13; });
 		if ($(popup).hasClass('triggered') && !$(popup).hasClass('force_trigger')) return;
-		var menu = $(popup+' .t_popup_menu'),
-			body = $(popup+' .t_popup_body');
-		// initial states
+		var menu = popup+' .t_popup_menu',
+			body = popup+' .t_popup_body';
 		$(popup).addClass('triggered');
 		$(body).css({'margin-top': $(popup+' .t_popup_head').outerHeight()});
 		$(menu).children('li:first').addClass('active');
 		$(body).find('.pane_'+$(menu).children('li:first').attr('data-pane')).show();
-		$(body).find('.control').each(function() {
-			var control = $(this).attr('title');
-			if ($(this).is(':checked') || $(this).is(':selected')) $(this).parents('.option_field').siblings('.dependent_' + control).show();
-		});
-		// event listeners
-		$(popup+' .t_popup_name').on('change', function() { $('#'+$(this).attr('data-id')).html($(this).val()); });
 		$(menu).children('li').on('click', function() {
 			$(this).siblings().removeClass('active');
 			$(this).addClass('active');
 			$(body).find('.pane').hide();
 			$(body).find('.pane_'+$(this).attr('data-pane')).show();
 		});
+		$(popup+' .t_popup_name').on('keyup', function() { $('#'+$(this).attr('data-id')).html($(this).val()); });
 		$('.t_popup_close').on('click', function() {
 			$(popup).hide();
 			$('body').removeClass('no-scroll');
 		});
-		$(body).find('label .toggle_tooltip').on('click', function() {
-			$(this).parents('label').parents('p').siblings('.tooltip:first').toggle();
-			return false;
-		});
-		$(body).find('.list_label .toggle_tooltip').on('click', function() {
-			$(this).parents('.list_label').siblings('.tooltip:first').toggle();
-			return false;
-		});
-		$(body).find('.tooltip').on('mouseleave', function() { $(this).hide(); });
-		$(body).find('.option_group > label').on('click', function() {
-			$(this).children('.toggle_group').toggleClass('toggled');
-			$(this).siblings('.group_fields').toggle();
-		});
-		$(body).find('.control_group .checkboxes input').on('change', function() {
-			$(this).parents('.option_field').siblings('.dependent_'+$(this).attr('title')).hide();
-			$(this).parents('.checkboxes').children('li').each(function() {
-				if ($(this).children('.control').is(':checked'))
-					$(this).parents('.option_field').siblings('.dependent_'+$(this).children('.control').attr('title')).show();
-			});
-		});
-		$(body).find('.control_group .radio input').on('change', function() {
-			$(this).parents('.option_field').siblings('.dependent_'+$(this).parents('.radio').attr('title')).hide();
-			$(this).parents('.radio').children('li').each(function() {
-				if ($(this).children('.control').is(':checked'))
-					$(this).parents('.option_field').siblings('.dependent_'+$(this).children('.control').attr('title')).show();
-			});
-		});
-		$(body).find('.control_group select').on('change', function() {
-			$(this).parents('.option_field').siblings('.dependent_'+$(this).attr('title')).hide();
-			$(this).children('.control').each(function() {
-				if ($(this).is(':selected'))
-					$(this).parents('.option_field').siblings('.dependent_'+$(this).attr('title')).show();
-			});
-		});
+		thesis_options.init(body);
 	}
 };
 })(jQuery);

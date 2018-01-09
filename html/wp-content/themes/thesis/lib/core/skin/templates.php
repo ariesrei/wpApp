@@ -1,23 +1,48 @@
 <?php
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
 class thesis_templates {
-	private $core = array();			// (array) core templates for this skin
+	private $core = array();			// (array) core templates for this Skin
 	private $post_types = array();		// (array) WP custom post types
 	private $queries = array();			// (array) query modification data for active templates
 	public $active = array();			// (array) data for all active templates
 	public $head = array(				// (array) <head> template
 		'thesis_html_head' => array(
+			'thesis_stylesheets_link',
 			'thesis_title_tag',
 			'thesis_meta_description',
-			'thesis_meta_keywords',
 			'thesis_meta_robots',
-			'thesis_stylesheets_link',
-			'thesis_favicon',
 			'thesis_canonical_link',
-			'thesis_feed_link',
-			'thesis_pingback_link',
 			'thesis_html_head_scripts'));
-	// The following properties are intended for use by the template editor ONLY
+	public $exclude = array(			// (array) Custom Post Types to exclude from Template Manager
+		'revision', 					// wp
+		'nav_menu_item', 				// wp
+		'attachment', 					// wp
+		'custom_css', 					// wp
+		'customize_changeset', 			// wp
+		'product_type',					// wc
+		'product_variation', 			// wc
+		'product_visibility', 			// wc
+		'product_shipping_class',		// wc
+		'shop_order', 					// wc
+		'shop_coupon', 					// wc
+		'shop_webhook', 				// wc
+		'shop_order_refund', 			// wc
+		'pa_color',						// wc
+		'shop_subscription', 			// wcs
+		'payment_retry', 				// wcs
+		'wpcf7_contact_form', 			// cf7
+		'bwg_gallery', 					// photo gallery
+		'bwg_album', 					// photo gallery
+		'bwg_tag', 						// photo gallery
+		'wp-types-group', 				// types
+		'wp-types-user-group');			// types
+/*
+	The following properties are intended for use by the template editor ONLY
+*/
 	private $template = array();		// (array) active template in the template editor
 	private $custom = array();			// (array) custom template data from ->get_custom()
 	private $options = array();			// (array) template options
@@ -27,21 +52,22 @@ class thesis_templates {
 		global $thesis;
 		$this->head = is_array($head = $thesis->api->get_option('thesis_head')) ? $head : $this->head;
 		$this->active = is_array($templates) ? $templates : $this->active;
-		add_action('init', array($this, 'init'));
+		add_action('wp_loaded', array($this, 'init'));
 		add_action('thesis_init_editor', array($this, 'init_editor'));
-		add_filter('thesis_site_menu', array($this, 'site_menu'), 1);
+		add_filter('thesis_site_menu', array($this, 'site_menu'), 90);
 	}
 
 	public function site_menu($site) {
 		global $thesis;
 		$menu['head'] = array(
 			'text' => $thesis->api->strings['html_head'],
-			'url' => admin_url('admin.php?page=thesis&canvas=head'));
+			'url' => admin_url('admin.php?page=thesis&canvas=head'),
+			'description' => __('Manage the output of your site&#8217;s HTML <code>&lt;head&gt;</code>', 'thesis'));
 		return is_array($site) ? array_merge($site, $menu) : $menu;
 	}
 
 	public function init() {
-		global $wp_post_types;
+		global $wp_post_types, $wp_taxonomies;
 		$this->core = array(
 			'home' => array(
 				'title' => __('Home', 'thesis')),
@@ -66,9 +92,6 @@ class thesis_templates {
 			'tag' => array(
 				'title' => __('Tag', 'thesis'),
 				'parent' => 'archive'),
-			'tax' => array(
-				'title' => __('Taxonomy', 'thesis'),
-				'parent' => 'archive'),
 			'author' => array(
 				'title' => __('Author', 'thesis'),
 				'parent' => 'archive'),
@@ -84,11 +107,19 @@ class thesis_templates {
 			'search' => array(
 				'title' => __('Search Results', 'thesis'),
 				'parent' => 'archive'));
-		$this->core = is_array($core = apply_filters('thesis_core_templates', $this->core)) ? $core : $this->core;
+		foreach ($wp_taxonomies as $slug => $data)
+			if (empty($data->_builtin) && !in_array($slug, $this->exclude))
+				$this->core[$slug] = array(
+					'title' => ucwords($data->labels->name),
+					'parent' => 'archive');
 		if (is_array($wp_post_types))
 			$this->post_types = array_keys(array_slice($wp_post_types, 5));
 		foreach ($this->post_types as $post_type)
-			$this->core[$post_type] = array('title' => $wp_post_types[$post_type]->label, 'parent' => 'single');
+			if (!in_array($post_type, $this->exclude)) {
+				$this->core["single-$post_type"] = array('title' => $wp_post_types[$post_type]->labels->singular_name, 'parent' => 'single');
+				$this->core[$post_type] = array('title' => $wp_post_types[$post_type]->label, 'parent' => 'archive');
+			}
+		$this->core = is_array($core = apply_filters('thesis_templates', $this->core)) ? $core : $this->core;
 	}
 
 	public function get_template($id = false) {
@@ -99,16 +130,17 @@ class thesis_templates {
 			'page') : ($wp_query->is_home ?
 			'home' : ($wp_query->is_single ? ($wp_query->is_attachment ?
 			'attachment' : (!empty($wp_query->query_vars['post_type']) && in_array($wp_query->query_vars['post_type'], $this->post_types) ?
-			$wp_query->query_vars['post_type'] :
+			"single-{$wp_query->query_vars['post_type']}" :
 			'single')) : ($wp_query->is_category ?
 			'category' : ($wp_query->is_tag ?
-			'tag' : ($wp_query->is_tax ?
-			'tax' : ($wp_query->is_archive ? ($wp_query->is_day ?
+			'tag' : ($wp_query->is_tax && !empty($wp_query->queried_object->taxonomy) ?
+			$wp_query->queried_object->taxonomy : ($wp_query->is_archive ? ($wp_query->is_day ?
 			'day' : ($wp_query->is_month ?
 			'month' : ($wp_query->is_year ?
 			'year' : ($wp_query->is_author ?
-			'author' :
-			'archive')))) : ($wp_query->is_search ?
+			'author' : ($wp_query->is_post_type_archive && !empty($wp_query->query_vars['post_type']) ?
+			$wp_query->query_vars['post_type'] :
+			'archive'))))) : ($wp_query->is_search ?
 			'search' : ($wp_query->is_404 ?
 			'fourohfour' :
 			'home')))))))));
@@ -132,24 +164,24 @@ class thesis_templates {
 	}
 
 	private function get_custom() {
-		$templates = $names = $core = array();
+		$templates = $names = $core = $ids = array();
 		$core = array_keys($this->core);
-		foreach ($this->active as $name => $template)
-			if (!in_array($name, $core)) {
-				$templates[$name] = $template;
-				$names[] = $name;
+		foreach ($this->active as $id => $template)
+			if (!in_array($id, $core) && !empty($template['title'])) {
+				$templates[$id] = $template;
+				$ids[] = $id;
 			}
 		return array(
 			'templates' => $templates,
-			'names' => $names);
+			'ids' => $ids);
 	}
 
 	public function custom_select() {
 		$templates[''] = __('No Custom Template', 'thesis');
 		$custom = $this->get_custom();
 		if (is_array($custom['templates']))
-			foreach ($custom['templates'] as $name => $template)
-				$templates[$name] = $template['title'];
+			foreach ($custom['templates'] as $id => $template)
+				$templates[$id] = $template['title'];
 		return $templates;
 	}
 
@@ -161,35 +193,35 @@ class thesis_templates {
 	public function editor_head() {
 		global $thesis;
 		$css = array(
-			'box-form' => THESIS_CSS_URL . '/box_form.css',
-			'templates' => THESIS_CSS_URL . '/templates.css');
+			'box-form' => THESIS_CSS_URL. '/box_form.css',
+			'templates' => THESIS_CSS_URL. '/templates.css');
 		foreach ($css as $name => $href)
 			echo "<link rel=\"stylesheet\" type=\"text/css\" href=\"$href?ver={$thesis->version}\" />\n";
 	}
 
 	public function editor_scripts() {
 		global $thesis;
-		echo "<script src=\"" . THESIS_JS_URL . "/templates.js?ver={$thesis->version}\"></script>\n";
+		echo "<script src=\"", THESIS_JS_URL, "/templates.js?ver={$thesis->version}\"></script>\n";
 	}
 
 	public function editor($data) {
 		global $thesis;
 		if (!is_array($data) || !is_array($this->template = $data['template']) || !is_array($form = $data['form'])) return;
-		$box_form = $thesis->api->get_box_form();
 		$tab = str_repeat("\t", $depth = 2);
 		$this->tabindex = 10;
 		$this->options = $this->get_options();
 		$this->custom = $this->get_custom();
-		$switch = !empty($this->options) || in_array($this->template['id'], $this->custom['names']) ? ' <span id="switch_template_options" data-style="switch">S</span>' : '';
+		$switch = !empty($this->options) || in_array($this->template['id'], $this->custom['ids']) ? ' <span id="switch_template_options" data-style="switch">&#9881;</span>' : '';
 		return
-			"$tab<h3><span id=\"template\" class=\"edit_templates\" title=\"" . __('click to edit other templates or to add a new template', 'thesis') . "\">{$this->template['title']}</span>$switch</h3>\n".
+			$thesis->api->alert(__('Saving template&hellip;', 'thesis'), 'saving_template', true, false, 2).
+			"$tab<h3><span id=\"template\" data-style=\"button\" title=\"". __('click to edit other templates or to add a new template', 'thesis'). "\">{$this->template['title']}</span>$switch</h3>\n".
 			$this->manager($depth).
 			"$tab<form id=\"t_boxes\" method=\"post\" action=\"\" enctype=\"multipart/form-data\">\n".
 			"$tab\t<input type=\"hidden\" id=\"current_template\" name=\"template\" value=\"{$this->template['id']}\" />\n".
 			$this->options($depth + 1).
-			$box_form->body(array_merge($form, array('tabindex' => $this->tabindex, 'depth' => $depth + 1))).
-			"$tab\t" . wp_nonce_field('thesis-save-template', '_wpnonce-thesis-ajax', true, false) . "\n".
-			"$tab\t<input type=\"submit\" data-style=\"button save\" id=\"save_template\" name=\"save_template\" value=\"" . __('Save Template', 'thesis') . "\" />\n".
+			$thesis->api->get_box_form()->body(array_merge($form, array('tabindex' => $this->tabindex, 'depth' => $depth + 1))).
+			"$tab\t". wp_nonce_field('thesis-save-template', '_wpnonce-thesis-ajax', true, false). "\n".
+			"$tab\t<input type=\"submit\" data-style=\"button save\" id=\"save_template\" name=\"save_template\" value=\"". __('Save Template', 'thesis'). "\" />\n".
 			"$tab</form>\n";
 	}
 
@@ -207,18 +239,18 @@ class thesis_templates {
 			$class = $name == $this->template['id'] ? ' class="current_template"' : '';
 			$title = $name == $this->template['id'] ?
 				$this->core[$name]['title'] :
-				"<a class=\"edit_template\" href=\"\" data-template=\"$name\" title=\"" . __('edit this template', 'thesis') . "\">{$this->core[$name]['title']}</a><a class=\"delete_template\" href=\"\" data-template=\"$name\" title=\"" . __('delete template', 'thesis') . "\">[&times;]</a>";
+				"<a class=\"edit_template\" href=\"\" data-template=\"$name\" title=\"". __('edit this template', 'thesis'). "\">{$this->core[$name]['title']}</a><a class=\"delete_template\" href=\"\" data-template=\"$name\" title=\"". __('delete template', 'thesis'). "\">&#10062;</a>";
 			if (is_array($templates)) {
 				$child_links = '';
 				foreach ($templates as $child) {
 					$child_class = $child == $this->template['id'] ? ' class="current_template"' : '';
 					$child_title = $child == $this->template['id'] ?
 						$this->core[$child]['title'] :
-						"<a class=\"edit_template\" href=\"\" data-template=\"$child\" title=\"" . __('edit this template', 'thesis') . "\">{$this->core[$child]['title']}</a><a class=\"delete_template\" href=\"\" data-template=\"$child\" title=\"" . __('delete template', 'thesis') . "\">[&times;]</a>";
+						"<a class=\"edit_template\" href=\"\" data-template=\"$child\" title=\"". __('edit this template', 'thesis'). "\">{$this->core[$child]['title']}</a><a class=\"delete_template\" href=\"\" data-template=\"$child\" title=\"". __('delete template', 'thesis'). "\">&#10062;</a>";
 					$child_links .= "$tab\t\t\t\t\t<li$child_class>$child_title</li>\n";
 				}
 				$children =
-					" <span class=\"toggle_child_templates\" href=\"\">[+]</span>\n".
+					" <span class=\"toggle_child_templates\" href=\"\">&#8862;</span>\n".
 					"$tab\t\t\t\t<ul class=\"child_templates\">\n".
 					$child_links.
 					"$tab\t\t\t\t</ul>\n$tab\t\t\t";
@@ -231,7 +263,7 @@ class thesis_templates {
 				$current = $name == $this->template['id'] ? ' current_template' : '';
 				$title = $name == $this->template['id'] ?
 					$template['title'] :
-					"<a class=\"edit_template\" href=\"\" data-template=\"$name\" title=\"" . __('edit this template', 'thesis') . "\">{$template['title']}</a><a class=\"delete_template\" href=\"\" data-template=\"$name\" title=\"" . __('delete template', 'thesis') . ": {$template['title']}\">[&times;]</a>";
+					"<a class=\"edit_template\" href=\"\" data-template=\"$name\" title=\"". __('edit this template', 'thesis'). "\">{$template['title']}</a><a class=\"delete_template\" href=\"\" data-template=\"$name\" title=\"". __('delete template', 'thesis'). ": {$template['title']}\">&#10062;</a>";
 				$custom_links .= "$tab\t\t\t<li class=\"custom_template $name$current\">$title</li>\n";
 			}
 			$custom =
@@ -242,13 +274,13 @@ class thesis_templates {
 		return
 			"$tab<div id=\"t_template_manager\">\n".
 			"$tab\t<div id=\"core_templates\" class=\"template_module\">\n".
-			"$tab\t\t<h4 class=\"manager_heading\">" . __('Core Templates', 'thesis') . "</h4>\n".
+			"$tab\t\t<h4 class=\"manager_heading\">". __('Core Templates', 'thesis'). "</h4>\n".
 			"$tab\t\t<ul>\n".
 			$core.
 			"$tab\t\t</ul>\n".
 			"$tab\t</div>\n".
 			"$tab\t<div id=\"custom_templates\" class=\"template_module\">\n".
-			"$tab\t\t<h4 class=\"manager_heading\">" . __('Custom Templates', 'thesis') . " <span id=\"add_template\" data-style=\"button action\"  title=\"" . __('click to add a new template', 'thesis') . "\">" . __('add new', 'thesis') . "</span></h4>\n".
+			"$tab\t\t<h4 class=\"manager_heading\">". __('Custom Templates', 'thesis'). " <span id=\"add_template\" data-style=\"button action\"  title=\"". __('click to add a new template', 'thesis'). "\">". __('add new', 'thesis'). "</span></h4>\n".
 			$custom.
 			"$tab\t</div>\n".
 			$this->add_form($depth + 1).
@@ -287,9 +319,9 @@ class thesis_templates {
 		$tab = str_repeat("\t", $depth);
 		$options = array();
 		$options[''] = __('Select a template:', 'thesis');
-		foreach ($this->active as $name => $template)
-			if ($name != $this->template['id'])
-				$options[$name] = !empty($template['title']) ? $template['title'] : (!empty($this->core[$name]['title']) ? $this->core[$name]['title'] : $name);
+		foreach ($this->active as $id => $template)
+			if ($id != $this->template['id'] && (!empty($template['title']) || !empty($this->core[$id]['title'])))
+				$options[$id] = !empty($template['title']) ? $template['title'] : $this->core[$id]['title'];
 		$form = $thesis->api->form->fields(array(
 			'copy_from' => array(
 				'type' => 'select',
@@ -299,7 +331,7 @@ class thesis_templates {
 			$form['output'].
 			"$tab\t<p>\n".
 			"$tab\t\t<input type=\"hidden\" id=\"copy_to\" name=\"template\" value=\"{$this->template['id']}\" />\n".
-			"$tab\t\t<input type=\"submit\" id=\"copy_template\" data-style=\"button save\" name=\"copy_template\" value=\"" . __('Copy Template', 'thesis') . "\" />\n".
+			"$tab\t\t<input type=\"submit\" id=\"copy_template\" data-style=\"button save\" name=\"copy_template\" value=\"". __('Copy Template', 'thesis'). "\" />\n".
 			"$tab\t</p>\n".
 			"$tab</form>\n";
 	}
@@ -310,7 +342,7 @@ class thesis_templates {
 		$menu = $panes = array();
 		$title = ": {$this->template['title']}";
 		$name = false;
-		if ($custom = in_array($this->template['id'], $this->custom['names'])) {
+		if ($custom = in_array($this->template['id'], $this->custom['ids'])) {
 			$title = '';
 			$name = array(
 				'id' => 'template_title',
@@ -341,7 +373,7 @@ class thesis_templates {
 		return $thesis->api->popup(array(
 			'id' => 'template',
 			'type' => 'template',
-			'title' => __('Template', 'thesis') . $title,
+			'title' => __('Template', 'thesis'). $title,
 			'name' => $name,
 			'menu' => $menu,
 			'panes' => $panes));
@@ -381,7 +413,7 @@ class thesis_templates {
 	private function remove_box($id) {
 		if (!is_array($this->active)) return;
 		foreach ($this->active as $name => $template)
-			if (is_array($template['boxes']))
+			if (!empty($template['boxes']) && is_array($template['boxes']))
 				foreach ($template['boxes'] as $rotator => $boxes)
 					if ($rotator == $id)
 						unset($this->active[$name]['boxes'][$rotator]);
@@ -393,7 +425,7 @@ class thesis_templates {
 
 	public function create($title) {
 		if (empty($title)) return false;
-		$id = 'custom_' . time();
+		$id = 'custom_'. time();
 		$template[$id] = array('title' => $title);
 		$this->active = array_merge($this->active, $template);
 		return array(
@@ -418,13 +450,16 @@ class thesis_templates {
 		global $thesis;
 		if (!is_array($form)) return;
 		$tab = str_repeat("\t", $depth = 2);
-		$box_form = $thesis->api->get_box_form();
 		return
-			"$tab<h3>" . sprintf(__('%1$s %2$s', 'thesis'), $thesis->api->strings['html_head'], $thesis->api->strings['editor']) . "</h3>\n".
-			"$tab<form id=\"t_boxes\" method=\"post\" action=\"\" enctype=\"multipart/form-data\">\n".
-			$box_form->body(array_merge($form, array('tabindex' => 10, 'depth' => $depth + 1))).
-			"$tab\t<input type=\"submit\" data-style=\"button save\" class=\"t_save\" id=\"save_head\" name=\"save_head\" value=\"" . __('Save HTML Head', 'thesis') . "\" />\n".
-			"$tab\t\t" . wp_nonce_field('thesis-save-head', '_wpnonce-thesis-ajax', true, false) . "\n".
+			$thesis->api->alert(__('Saving HTML head&hellip;', 'thesis'), 'saving_options', true, false, $depth).
+			(!empty($_GET['saved']) ? $thesis->api->alert($_GET['saved'] == 'yes' ?
+			__('HTML Head saved!', 'thesis') :
+			__('HTML Head not saved. Please try again.', 'thesis'), 'options_saved', true, false, $depth) : '').
+			"$tab<h3>". sprintf(__('%1$s %2$s', 'thesis'), $thesis->api->strings['html_head'], $thesis->api->strings['editor']). "</h3>\n".
+			"$tab<form id=\"t_boxes\" method=\"post\" action=\"". admin_url('admin-post.php?action=thesis_head'). "\" enctype=\"multipart/form-data\">\n".
+			$thesis->api->get_box_form()->body(array_merge($form, array('tabindex' => 10, 'depth' => $depth + 1))).
+			"$tab\t<input type=\"submit\" data-style=\"button save\" class=\"t_save\" id=\"save_options\" name=\"save_head\" value=\"". __('Save HTML Head', 'thesis'). "\" />\n".
+			"$tab\t\t". wp_nonce_field('thesis-save-head', '_wpnonce-thesis-save-head', true, false). "\n".
 			"$tab</form>\n";
 	}
 

@@ -1,8 +1,11 @@
 <?php
-/*---:[ Copyright DIYthemes, LLC. Patent pending. All rights reserved. DIYthemes, Thesis, and the Thesis Theme are registered trademarks of DIYthemes, LLC. ]:---*/
-// wrapping this just in case someone attempts to include this file more than once.
-if (!class_exists('thesis_comments_dummy')) {
+/*
+Copyright 2012 DIYthemes, LLC. Patent pending. All rights reserved.
+License: DIYthemes Software License Agreement
+License URI: http://diythemes.com/thesis/rtfm/software-license-agreement/
+*/
+if (!class_exists('thesis_comments_dummy')) { // double-include precaution
 	class thesis_comments_dummy {
-		// this is the dumbest thing ever.
+		// Litrally the dumbest thing ever. Yes, litrally.
 	}
 }
